@@ -1,0 +1,21 @@
+.{
+    .name = .SDL3,
+    .version = "3.4.0",
+    .fingerprint = 0x6c733b53f0199634,
+    .minimum_zig_version = "0.15.0",
+    .dependencies = .{
+        .sorvi = .{
+            .path = "sorvi", // symlink to the zig cache folder for now
+        },
+        .SDL3 = .{
+            .url = "git+https://github.com/libsdl-org/SDL.git?ref=release-3.4.0#a962f40bbba175e9716557a25d5d7965f134a3d3",
+            .hash = "N-V-__8AABtk8gIAP7ZQ4yacjIPcrx3btsH0bGNpJG4MPpm6",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "LICENSE.txt",
+        "src",
+    },
+}
