@@ -86,14 +86,15 @@ fn SORVI_CreateDevice() callconv(.c) ?*c.SDL_VideoDevice {
         .CreateWindowFramebuffer = SORVI_CreateWindowFramebuffer,
         .UpdateWindowFramebuffer = SORVI_UpdateWindowFramebuffer,
         .DestroyWindowFramebuffer = SORVI_DestroyWindowFramebuffer,
-        .GL_LoadLibrary = SORVI_LoadLibrary,
-        .GL_UnloadLibrary = SORVI_UnloadLibrary,
+        .GL_LoadLibrary = SORVI_GL_LoadLibrary,
+        .GL_UnloadLibrary = SORVI_GL_UnloadLibrary,
         .GL_GetProcAddress = SORVI_GL_GetProcAddress,
         .GL_CreateContext = SORVI_GL_CreateContext,
         .GL_SwapWindow = SORVI_GL_SwapWindow,
         .GL_DestroyContext = SORVI_GL_DestroyContext,
-        .Vulkan_LoadLibrary = SORVI_LoadLibrary,
-        .Vulkan_UnloadLibrary = SORVI_UnloadLibrary,
+        .Vulkan_LoadLibrary = SORVI_VK_LoadLibrary,
+        .Vulkan_UnloadLibrary = SORVI_VK_UnloadLibrary,
+        .Vulkan_GetInstanceExtensions = SORVI_VK_GetInstanceExtensions,
         .Vulkan_CreateSurface = SORVI_VK_CreateSurface,
         .Vulkan_DestroySurface = SORVI_VK_DestroySurface,
         .free = SORVI_DeleteDevice,
@@ -145,49 +146,16 @@ fn SORVI_SetDisplayMode(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_VideoDisplay, mode: ?
 
 fn SORVI_PumpEvents(_: ?*c.SDL_VideoDevice) callconv(.c) void {}
 
-fn SORVI_CreateWindow(device: ?*c.SDL_VideoDevice, window: ?*c.SDL_Window, _: c.SDL_PropertiesID) callconv(.c) bool {
+fn SORVI_CreateWindow(_: ?*c.SDL_VideoDevice, window: ?*c.SDL_Window, _: c.SDL_PropertiesID) callconv(.c) bool {
     global.window = window;
-
-    const api: GraphicsApi = D: {
-        if (window.?.flags & c.SDL_WINDOW_VULKAN != 0) {
-            break :D .vulkan;
-        } else if (window.?.flags & c.SDL_WINDOW_OPENGL != 0) {
-            break :D .gles;
-        } else {
-            break :D .raster;
-        }
-    };
-
-    switch (api) {
-        .vulkan => {
-            var surface: c.VkSurfaceKHR = undefined;
-            if (!SORVI_VK_CreateSurface(device, window, null, null, &surface)) {
-                return false;
-            }
-        },
-        .gles => {
-            if (SORVI_GL_CreateContext(device, window) == null) {
-                return false;
-            }
-        },
-        .raster => {
-            var fmt: c.SDL_PixelFormat = undefined;
-            var pixels: []u8 = undefined;
-            var pitch: c_int = 0;
-            if (!SORVI_CreateWindowFramebuffer(device, window, &fmt, @ptrCast(&pixels), &pitch)) {
-                return false;
-            }
-        },
-        .none => unreachable,
-    }
-
-    global.configuration.w = @intCast(window.?.w);
-    global.configuration.h = @intCast(window.?.h);
-    sorvi.video_v1.configure(global.configuration) catch {
-        SORVI_DestroyWindow(device, window);
-        return false;
-    };
     return true;
+}
+
+fn initialConfiguration() void {
+    var cpy = global.configuration;
+    cpy.w = @intCast(global.window.?.w);
+    cpy.h = @intCast(global.window.?.h);
+    sorvi.video_v1.configure(cpy) catch {};
 }
 
 fn SORVI_SetWindowSize(_: ?*c.SDL_VideoDevice, window: ?*c.SDL_Window) callconv(.c) void {
@@ -239,6 +207,7 @@ fn SORVI_CreateWindowFramebuffer(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window, form
         .direct = false,
     }) catch return false;
     global.api = .raster;
+    initialConfiguration();
     return true;
 }
 
@@ -268,11 +237,11 @@ fn SORVI_DestroyWindowFramebuffer(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window) cal
     global.api = .none;
 }
 
-fn SORVI_LoadLibrary(_: ?*c.SDL_VideoDevice, _: ?[*:0]const u8) callconv(.c) bool {
-    return true;
+fn SORVI_GL_LoadLibrary(_: ?*c.SDL_VideoDevice, _: ?[*:0]const u8) callconv(.c) bool {
+    return sorvi.gles_v1.available;
 }
 
-fn SORVI_UnloadLibrary(_: ?*c.SDL_VideoDevice) callconv(.c) void {}
+fn SORVI_GL_UnloadLibrary(_: ?*c.SDL_VideoDevice) callconv(.c) void {}
 
 fn SORVI_GL_GetProcAddress(_: ?*c.SDL_VideoDevice, proc: ?[*:0]const u8) callconv(.c) ?*const fn() callconv(.c) void {
     const fun: *const fn ([*:0]const u8) callconv(sorvi.abi.ccv) usize = @ptrFromInt(global.api.gles.proc_addr_fn);
@@ -305,6 +274,7 @@ fn SORVI_GL_CreateContext(device: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window) callco
             .float_buffers = device.?.gl_config.floatbuffers != 0,
         }) catch return null,
     };
+    initialConfiguration();
     return @ptrFromInt(0xDEADBEEF);
 }
 
@@ -320,42 +290,119 @@ fn SORVI_GL_DestroyContext(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_GLContextState) ca
     return true;
 }
 
-fn SORVI_VK_CreateSurface(device: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window, _: c.VkInstance, _: ?*const c.VkAllocationCallbacks, surface: ?*c.VkSurfaceKHR) callconv(.c) bool {
-    if (!sorvi.vulkan_v1.available) return false;
-    if (global.api == .vulkan) {
-        surface.?.* = switch (builtin.target.cpu.arch) {
-            .wasm32, .wasm64 => @intFromPtr(global.api.vulkan.surface),
-            else => @ptrCast(global.api.vulkan.surface),
-        };
-        return true;
-    }
-    if (global.api != .none) return false;
+const VkVersion = packed struct(u32) {
+    patch: u12,
+    minor: u10,
+    major: u7,
+    variant: u3,
+};
+
+const VkApplicationInfo = extern struct {
+    type: u32,
+    next: ?*anyopaque,
+    name: [*:0]const u8,
+    version: u32,
+    engine_name: [*:0]const u8,
+    engine_version: u32,
+    api_version: u32,
+};
+
+const VkInstanceCreateInfo = extern struct {
+    type: u32,
+    next: ?*anyopaque,
+    flags: u32,
+    app: *VkApplicationInfo,
+    enabled_layer_count: u32,
+    enabled_layer_names: [*]const [*:0]const u8,
+    enabled_extension_count: u32,
+    enabled_extension_names: [*]const [*:0]const u8,
+};
+
+fn vkCreateInstance(info: *const VkInstanceCreateInfo, _: *const anyopaque, instance: *c.VkInstance) callconv(.c) i32 {
     global.api = .{
         .vulkan = sorvi.vulkan_v1.init(.{
-            .required_extensions = .wrap(&.{}),
+            .required_extensions = .wrap(info.enabled_extension_names[0..info.enabled_extension_count]),
             .optional_extensions = .wrap(&.{}),
-            .required_layers = .wrap(&.{}),
+            .required_layers = .wrap(info.enabled_layer_names[0..info.enabled_layer_count]),
             .optional_layers = .wrap(&.{}),
-            .engine_name = "SDL",
-            .engine_version = 0,
-            .api_version = 0,
-        }) catch return false,
+            .engine_name = info.app.engine_name,
+            .engine_version = info.app.engine_version,
+            .api_version = info.app.api_version,
+        }) catch return -3, // VK_ERROR_INITIALIZATION_FAILED
     };
-    surface.?.* = switch (builtin.target.cpu.arch) {
-        .wasm32, .wasm64 => @intFromPtr(global.api.vulkan.surface),
-        else => @ptrCast(global.api.vulkan.surface),
-    };
-    device.?.vulkan_config = .{
-        .vkGetInstanceProcAddr = @ptrFromInt(global.api.vulkan.instance_proc_addr_fn),
-    };
-    return true;
+    instance.* = @ptrCast(global.api.vulkan.instance);
+    initialConfiguration();
+    return 0; // VK_SUCCESS
 }
 
-fn SORVI_VK_DestroySurface(_: ?*c.SDL_VideoDevice, _: c.VkInstance, _: c.VkSurfaceKHR, _: ?*const c.VkAllocationCallbacks) callconv(.c) void {
+fn vkDestroyInstance(_: c.VkInstance, _: *const anyopaque) callconv(.c) void {
     if (global.api != .vulkan) return;
     sorvi.vulkan_v1.deinit();
     global.api = .none;
 }
+
+fn vkEnumerateInstanceExtensionProperties(_: [*:0]const u8, count: *u32, _: *anyopaque) callconv(.c) i32 {
+    count.* = 0;
+    return 0;
+}
+
+fn vkEnumerateInstanceLayerProperties(count: *u32, _: *anyopaque) callconv(.c) i32 {
+    count.* = 0;
+    return 0;
+}
+
+fn fake_vk_instance_proc_addr_fn(instance: c.VkInstance, raw_name: [*:0]const u8) callconv(.c) usize {
+    const name = std.mem.span(raw_name);
+    if (std.mem.eql(u8, name, "vkGetInstanceProcAddr")) {
+        if (global.api == .vulkan) {
+            return global.api.vulkan.instance_proc_addr_fn;
+        } else {
+            @panic("sorvi_SDL3: recursion in vkGetInstanceProcAddr");
+        }
+    } else if (std.mem.eql(u8, name, "vkCreateInstance")) {
+        return @intFromPtr(&vkCreateInstance);
+    } else if (std.mem.eql(u8, name, "vkDestroyInstance")) {
+        return @intFromPtr(&vkDestroyInstance);
+    } else if (std.mem.eql(u8, name, "vkEnumerateInstanceExtensionProperties")) {
+        return @intFromPtr(&vkEnumerateInstanceExtensionProperties);
+    } else if (std.mem.eql(u8, name, "vkEnumerateInstanceLayerProperties")) {
+        return @intFromPtr(&vkEnumerateInstanceLayerProperties);
+    } else {
+        if (global.api == .vulkan) {
+            const real: *const fn (c.VkInstance, [*:0]const u8) callconv(.c) usize = @ptrFromInt(global.api.vulkan.instance_proc_addr_fn);
+            return real(instance, raw_name);
+        } else {
+            return 0;
+        }
+    }
+}
+
+fn SORVI_VK_LoadLibrary(device: ?*c.SDL_VideoDevice, _: ?[*:0]const u8) callconv(.c) bool {
+    if (!sorvi.vulkan_v1.available) return false;
+    device.?.vulkan_config.vkGetInstanceProcAddr = @ptrCast(&fake_vk_instance_proc_addr_fn);
+    return true;
+}
+
+fn SORVI_VK_UnloadLibrary(device: ?*c.SDL_VideoDevice) callconv(.c) void {
+    device.?.vulkan_config.vkGetInstanceProcAddr = null;
+}
+
+fn SORVI_VK_GetInstanceExtensions(_: ?*c.SDL_VideoDevice, count: ?*u32) callconv(.c) ?[*]const [*:0]const u8 {
+    count.?.* = 0;
+    return null;
+}
+
+fn SORVI_VK_CreateSurface(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window, _: c.VkInstance, _: ?*const c.VkAllocationCallbacks, surface: ?*c.VkSurfaceKHR) callconv(.c) bool {
+    if (!sorvi.vulkan_v1.available) return false;
+    if (global.api != .vulkan) return false;
+    surface.?.* = switch (builtin.target.cpu.arch) {
+        .wasm32, .wasm64 => @intFromPtr(global.api.vulkan.surface),
+        else => @ptrCast(global.api.vulkan.surface),
+    };
+    return true;
+}
+
+fn SORVI_VK_DestroySurface(_: ?*c.SDL_VideoDevice, _: c.VkInstance, _: c.VkSurfaceKHR, _: ?*const c.VkAllocationCallbacks) callconv(.c) void {}
 
 fn SORVI_DeleteDevice(device: ?*c.SDL_VideoDevice) callconv(.c) void {
     sorvi.default_allocator.destroy(device.?);
