@@ -307,7 +307,7 @@ const VkApplicationInfo = extern struct {
     next: ?*anyopaque,
     name: [*:0]const u8,
     version: u32,
-    engine_name: [*:0]const u8,
+    engine_name: ?[*:0]const u8,
     engine_version: u32,
     api_version: u32,
 };
@@ -330,7 +330,7 @@ fn vkCreateInstance(info: *const VkInstanceCreateInfo, _: *const anyopaque, inst
             .optional_extensions = .wrap(&.{}),
             .required_layers = .wrap(info.enabled_layer_names[0..info.enabled_layer_count]),
             .optional_layers = .wrap(&.{}),
-            .engine_name = info.app.engine_name,
+            .engine_name = info.app.engine_name orelse "SDL3-sorvi",
             .engine_version = info.app.engine_version,
             .api_version = info.app.api_version,
         }) catch return -3, // VK_ERROR_INITIALIZATION_FAILED
