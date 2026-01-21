@@ -90,6 +90,7 @@ fn SORVI_CreateDevice() callconv(.c) ?*c.SDL_VideoDevice {
         .GL_UnloadLibrary = SORVI_GL_UnloadLibrary,
         .GL_GetProcAddress = SORVI_GL_GetProcAddress,
         .GL_CreateContext = SORVI_GL_CreateContext,
+        .GL_MakeCurrent = SORVI_GL_MakeCurrent,
         .GL_SwapWindow = SORVI_GL_SwapWindow,
         .GL_DestroyContext = SORVI_GL_DestroyContext,
         .Vulkan_LoadLibrary = SORVI_VK_LoadLibrary,
@@ -276,6 +277,10 @@ fn SORVI_GL_CreateContext(device: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window) callco
     };
     initialConfiguration();
     return @ptrFromInt(0xDEADBEEF);
+}
+
+fn SORVI_GL_MakeCurrent(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window, _: c.SDL_GLContext) callconv(.c) bool {
+    return true;
 }
 
 fn SORVI_GL_SwapWindow(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window) callconv(.c) bool {
