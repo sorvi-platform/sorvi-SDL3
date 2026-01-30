@@ -701,3 +701,37 @@ pub fn audioTick(_: *@This(), buffer: []u8) !void {
     _ = c.SDL_PlaybackAudioThreadIterate(global.audio_device);
     global.audio_buffer = &.{};
 }
+
+fn SDL_memmove(dst: [*]u8, src: [*]const u8, len: usize) callconv(.c) [*]u8 {
+    @memmove(dst[0..len], src[0..len]);
+    return dst;
+}
+
+fn SDL_memcpy(noalias dst: [*]u8, noalias src: [*]const u8, len: usize) callconv(.c) [*]u8 {
+    @memcpy(dst[0..len], src[0..len]);
+    return dst;
+}
+
+fn SDL_memset(dst: [*]u8, elem: c_int, len: usize) callconv(.c) [*]u8 {
+    @memset(dst[0..len], @intCast(elem));
+    return dst;
+}
+
+fn SDL_memset4(dst: [*]u32, elem: u32, len: usize) callconv(.c) [*]u32 {
+    @memset(dst[0..len], elem);
+    return dst;
+}
+
+comptime {
+    if (build_options.sdl2_compat) {
+        @export(&SDL_memmove, .{ .name = "SDL_memmove_REAL", .visibility = .hidden });
+        @export(&SDL_memcpy, .{ .name = "SDL_memcpy_REAL", .visibility = .hidden });
+        @export(&SDL_memset, .{ .name = "SDL_memset_REAL", .visibility = .hidden });
+        @export(&SDL_memset4, .{ .name = "SDL_memset4_REAL", .visibility = .hidden });
+    } else {
+        @export(&SDL_memmove, .{ .name = "SDL_memmove", .visibility = .hidden });
+        @export(&SDL_memcpy, .{ .name = "SDL_memcpy", .visibility = .hidden });
+        @export(&SDL_memset, .{ .name = "SDL_memset", .visibility = .hidden });
+        @export(&SDL_memset4, .{ .name = "SDL_memset4", .visibility = .hidden });
+    }
+}

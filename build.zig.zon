@@ -17,5 +17,6 @@
         "build.zig.zon",
         "LICENSE.txt",
         "src",
+        "include",
     },
 }

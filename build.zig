@@ -52,7 +52,7 @@ pub fn build(b: *std.Build) void {
             .style = .{ .cmake = sdl3_dep.path("include/build_config/SDL_build_config.h.cmake") },
             .include_path = "SDL_build_config.h",
         }, .{
-            .SDL_PLATFORM_PRIVATE = !sdl2_compat,
+            .SDL_PLATFORM_PRIVATE = true,
             .HAVE_GCC_ATOMICS = false,
             .HAVE_GCC_SYNC_LOCK_TEST_AND_SET = false,
             .SDL_DISABLE_ALLOCA = false,
@@ -484,7 +484,7 @@ pub fn build(b: *std.Build) void {
             .SDL_DIALOG_DUMMY = true,
             .SDL_TRAY_DUMMY = true,
             .SDL_ALTIVEC_BLITTERS = false,
-            .DYNAPI_NEEDS_DLOPEN = !sdl2_compat,
+            .DYNAPI_NEEDS_DLOPEN = true,
             .SDL_USE_IME = false,
             .SDL_DISABLE_WINDOWS_IME = true,
             .SDL_GDK_TEXTINPUT = false,
@@ -534,6 +534,7 @@ pub fn build(b: *std.Build) void {
     headers.addSystemIncludePath(sysroot.headers);
     headers.addIncludePath(sdl3_dep.path("include"));
     headers.addIncludePath(sdl3_dep.path("src"));
+    headers.addIncludePath(b.path("include"));
     headers.addConfigHeader(build_config_h);
 
     const opts = b.addOptions();
@@ -557,8 +558,10 @@ pub fn build(b: *std.Build) void {
     });
     libSDL3.root_module.addIncludePath(sdl3_dep.path("include"));
     libSDL3.root_module.addIncludePath(sdl3_dep.path("src"));
-    libSDL3.installHeadersDirectory(sdl3_dep.path("include"), "", .{});
+    libSDL3.root_module.addIncludePath(b.path("include"));
     libSDL3.root_module.addConfigHeader(build_config_h);
+    libSDL3.installHeadersDirectory(sdl3_dep.path("include"), "", .{});
+    libSDL3.installHeadersDirectory(b.path("include"), "", .{});
 
     const revision_h = b.addConfigHeader(.{
         .style = .{ .cmake = sdl3_dep.path("include/build_config/SDL_revision.h.cmake") },
@@ -578,6 +581,7 @@ pub fn build(b: *std.Build) void {
         b.fmt("-DSDL_BUILD_MAJOR_VERSION={}", .{libSDL3.version.?.major}),
         b.fmt("-DSDL_BUILD_MINOR_VERSION={}", .{libSDL3.version.?.minor}),
         b.fmt("-DSDL_BUILD_MICRO_VERSION={}", .{libSDL3.version.?.patch}),
+        b.fmt("-DSDL_SORVI_SDL2_COMPAT_MODE={}", .{@as(u32, if (sdl2_compat) 1 else 0)}),
         "-Wall",
         "-Wundef",
         "-Wfloat-conversion",
@@ -587,27 +591,6 @@ pub fn build(b: *std.Build) void {
         "-Wimplicit-fallthrough",
     }) catch @panic("OOM");
 
-    if (sdl2_compat) {
-        // symbols not renamed by dynapi
-        defines.appendSlice(b.allocator, &.{
-            "-DSDL_CreateThreadWithStackSize=SDL_CreateThreadWithStackSize_REAL",
-            "-DSDL_VideoInit=SDL_VideoInit_REAL",
-            "-DSDL_VideoQuit=SDL_VideoQuit_REAL",
-            "-DSDL_SetRelativeMouseMode=SDL_SetRelativeMouseMode_REAL",
-            "-DSDL_GetRelativeMouseMode=SDL_GetRelativeMouseMode_REAL",
-            "-DSDL_LockSensors=SDL_LockSensors_REAL",
-            "-DSDL_UnlockSensors=SDL_UnlockSensors_REAL",
-        }) catch @panic("OOM");
-    }
-
-    {
-        var files = b.addWriteFiles();
-        _ = files.add("SDL_begin_config_private.h",
-            \\#define SDL_PLATFORM_PRIVATE_NAME "sorvi"
-        );
-        _ = files.add("SDL_end_config_private.h", "");
-        libSDL3.root_module.addIncludePath(files.getDirectory());
-    }
 
     libSDL3.root_module.addCSourceFiles(.{
         .flags = defines.items,
@@ -691,9 +674,11 @@ pub fn build(b: *std.Build) void {
             "stdlib/SDL_getenv.c",
             "stdlib/SDL_iconv.c",
             "stdlib/SDL_malloc.c",
-            "stdlib/SDL_memcpy.c",
-            "stdlib/SDL_memmove.c",
-            "stdlib/SDL_memset.c",
+            // These files undef symbol rename if SDL_DYNAPI is not set
+            // Reimplemented in src/sorvi.zig
+            // "stdlib/SDL_memcpy.c",
+            // "stdlib/SDL_memmove.c",
+            // "stdlib/SDL_memset.c",
             "stdlib/SDL_mslibc.c",
             "stdlib/SDL_murmur3.c",
             "stdlib/SDL_qsort.c",
