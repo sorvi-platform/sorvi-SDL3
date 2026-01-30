@@ -591,6 +591,22 @@ pub fn build(b: *std.Build) void {
         "-Wimplicit-fallthrough",
     }) catch @panic("OOM");
 
+    libSDL3.root_module.addCSourceFiles(.{
+        .flags = std.mem.concat(b.allocator, []const u8, &.{
+            defines.items,
+            switch (target.result.cpu.arch) {
+                .wasm32, .wasm64 => &.{
+                    // enables use of more webgl friendly code path
+                    "-DSDL_PLATFORM_EMSCRIPTEN",
+                },
+                else => &.{},
+            },
+        }) catch @panic("OOM"),
+        .files = &.{
+            "render/opengles2/SDL_render_gles2.c",
+        },
+        .root = sdl3_dep.path("src"),
+    });
 
     libSDL3.root_module.addCSourceFiles(.{
         .flags = defines.items,
@@ -657,7 +673,6 @@ pub fn build(b: *std.Build) void {
             "render/gpu/SDL_pipeline_gpu.c",
             "render/gpu/SDL_render_gpu.c",
             "render/gpu/SDL_shaders_gpu.c",
-            "render/opengles2/SDL_render_gles2.c",
             "render/opengles2/SDL_shaders_gles2.c",
             "render/software/SDL_blendfillrect.c",
             "render/software/SDL_blendline.c",
