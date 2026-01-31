@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
 
     const sdl2_compat = b.option(bool, "sdl2_compat", "rename symbols for sdl2-compat") orelse false;
 
-    _ = b.dependency("sorvi", .{
+    const sorvi_dep = b.dependency("sorvi", .{
         .target = target,
         .optimize = optimize,
     });
@@ -766,4 +766,44 @@ pub fn build(b: *std.Build) void {
         .root = sdl3_dep.path("src"),
     });
     b.installArtifact(libSDL3);
+
+    const frontend = sorvi_dep.artifact("sorvi-frontend");
+
+    const Example = struct {
+        name: []const u8,
+        file: []const u8,
+    };
+
+    const examples: []const Example = &.{
+        .{
+            .name = "clear",
+            .file = "examples/01_clear.c",
+        },
+        .{
+            .name = "primitives",
+            .file = "examples/02_primitives.c",
+        },
+        .{
+            .name = "lines",
+            .file = "examples/03_lines.c",
+        },
+    };
+
+    for (examples) |example| {
+        const core = sorvi.addSorviCore(b, .{
+            .name = example.name,
+            .root_module = b.createModule(.{
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+            }),
+        });
+        core.root_module.linkLibrary(libSDL3);
+        core.root_module.addCSourceFile(.{
+            .file = b.path(example.file),
+        });
+        core.fixup(b);
+        const step = b.step(b.fmt("example:{s}", .{example.name}), b.fmt("run {s} example", .{example.name}));
+        step.dependOn(&sorvi.addRunSorviCore(b, frontend, core).step);
+    }
 }
