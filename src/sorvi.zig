@@ -672,11 +672,16 @@ pub fn videoTick(_: *@This(), _: sorvi.video_v1.frame_t) !u64 {
 pub fn videoConfiguration(_: *@This(), new: sorvi.video_v1.configuration_t, rw: u16, rh: u16) !void {
     const old = global.configuration;
     global.configuration = new;
+    const old_rw = global.render_w;
+    const old_rh = global.render_h;
     global.render_w = rw;
     global.render_h = rh;
     const window = global.window orelse return;
     if (new.w != old.w or new.h != old.h) {
         _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_RESIZED, new.w, new.h);
+    }
+    if (rw != old_rw or rh != old_rh) {
+        _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, rw, rh);
     }
     if (new.presentation != old.presentation) {
         switch (new.presentation) {
