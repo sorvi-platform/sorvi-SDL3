@@ -55,7 +55,7 @@ const global = struct {
         .flags = .{ .border = true },
         .presentation = .dont_care,
     };
-    var api: union (GraphicsApi) {
+    var api: union(GraphicsApi) {
         none,
         raster,
         gles: sorvi.gles_v1.init_result_t,
@@ -218,7 +218,7 @@ fn SORVI_UpdateWindowFramebuffer(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window, sdl_
     while (rects_left > 0) {
         var rects: [16]sorvi.raster_v1.rect_t = undefined;
         const chunk: usize = @min(rects_left, rects.len);
-        for (rects[0..chunk], sdl_rects.?[len - rects_left..][0..chunk]) |*a, *b| {
+        for (rects[0..chunk], sdl_rects.?[len - rects_left ..][0..chunk]) |*a, *b| {
             a.* = .{
                 .x = @intCast(b.x),
                 .y = @intCast(b.y),
@@ -244,7 +244,7 @@ fn SORVI_GL_LoadLibrary(_: ?*c.SDL_VideoDevice, _: ?[*:0]const u8) callconv(.c) 
 
 fn SORVI_GL_UnloadLibrary(_: ?*c.SDL_VideoDevice) callconv(.c) void {}
 
-fn SORVI_GL_GetProcAddress(_: ?*c.SDL_VideoDevice, proc: ?[*:0]const u8) callconv(.c) ?*const fn() callconv(.c) void {
+fn SORVI_GL_GetProcAddress(_: ?*c.SDL_VideoDevice, proc: ?[*:0]const u8) callconv(.c) ?*const fn () callconv(.c) void {
     const fun: *const fn ([*:0]const u8) callconv(sorvi.abi.ccv) usize = @ptrFromInt(global.api.gles.proc_addr_fn);
     return @ptrFromInt(fun(proc.?));
 }
@@ -478,7 +478,7 @@ export fn SDL_EnterAppMainCallbacks(
     app_event: c.SDL_AppEvent_func,
     app_quit: c.SDL_AppQuit_func,
 ) c_int {
-    const res = c.SDL_InitMainCallbacks(argc, @constCast(@ptrCast(argv)), app_init, app_iter, app_event, app_quit);
+    const res = c.SDL_InitMainCallbacks(argc, @ptrCast(@constCast(argv)), app_init, app_iter, app_event, app_quit);
     if (res != c.SDL_APP_CONTINUE) {
         c.SDL_QuitMainCallbacks(res);
     }
@@ -494,7 +494,7 @@ export fn SDL_RunApp(
     main: c.SDL_main_func,
     _: *anyopaque,
 ) c_int {
-    return c.SDL_CallMainFunction(argc, @constCast(@ptrCast(argv)), main);
+    return c.SDL_CallMainFunction(argc, @ptrCast(@constCast(argv)), main);
 }
 
 comptime {
@@ -502,8 +502,8 @@ comptime {
         .id = undefined,
         .name = undefined,
         .version = undefined,
-        .core_extensions = &.{.core_v1, .kbm_v1, .audio_v1, .video_v1},
-        .frontend_extensions = &.{.core_v1, .mem_v1, .video_v1},
+        .core_extensions = &.{ .core_v1, .kbm_v1, .audio_v1, .video_v1 },
+        .frontend_extensions = &.{ .core_v1, .mem_v1, .video_v1 },
     });
 }
 
@@ -517,8 +517,8 @@ pub fn sorvi_core_v1_get_str_core(key: sorvi.core_v1.str_key_core_t) callconv(so
 }
 
 pub fn init(_: *@This()) !void {
-    const argv: [*]const ?[*:0]const u8 = &.{"SDL3_app", null};
-    switch (c.SDL_main(1, @constCast(@ptrCast(argv)))) {
+    const argv: [*]const ?[*:0]const u8 = &.{ "SDL3_app", null };
+    switch (c.SDL_main(1, @ptrCast(@constCast(argv)))) {
         0 => {},
         else => |rc| std.debug.panic("SDL_main returned non-zero exit code: {}", .{rc}),
     }
@@ -544,13 +544,7 @@ fn sorviModifiersToSdl(sorvi_mods: sorvi.kbm_v1.modifiers_t) c.SDL_Keymod {
     return mods;
 }
 
-pub fn kbmKeyPress(
-    _: *@This(),
-    ts: u64,
-    _: sorvi.kbm_v1.absolute_t,
-    sorvi_mods: sorvi.kbm_v1.modifiers_t,
-    sorvi_scancode: sorvi.kbm_v1.scancode_t
-) !void {
+pub fn kbmKeyPress(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_scancode: sorvi.kbm_v1.scancode_t) !void {
     const mods = sorviModifiersToSdl(sorvi_mods);
     c.SDL_SetModState(mods);
     const scancode: c.SDL_Scancode = @intFromEnum(sorvi_scancode);
@@ -562,13 +556,7 @@ pub fn kbmKeyPress(
     }
 }
 
-pub fn kbmKeyRelease(
-    _: *@This(),
-    ts: u64,
-    _: sorvi.kbm_v1.absolute_t,
-    sorvi_mods: sorvi.kbm_v1.modifiers_t,
-    sorvi_scancode: sorvi.kbm_v1.scancode_t
-) !void {
+pub fn kbmKeyRelease(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_scancode: sorvi.kbm_v1.scancode_t) !void {
     const mods = sorviModifiersToSdl(sorvi_mods);
     c.SDL_SetModState(mods);
     const scancode: c.SDL_Scancode = @intFromEnum(sorvi_scancode);
@@ -591,26 +579,14 @@ fn sorviButtonToSdl(button: sorvi.kbm_v1.button_t) ?u8 {
     };
 }
 
-pub fn kbmButtonPress(
-    _: *@This(),
-    ts: u64,
-    _: sorvi.kbm_v1.absolute_t,
-    sorvi_mods: sorvi.kbm_v1.modifiers_t,
-    sorvi_button: sorvi.kbm_v1.button_t
-) !void {
+pub fn kbmButtonPress(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_button: sorvi.kbm_v1.button_t) !void {
     const mods = sorviModifiersToSdl(sorvi_mods);
     c.SDL_SetModState(mods);
     const button = sorviButtonToSdl(sorvi_button) orelse return;
     c.SDL_SendMouseButton(ts, global.window, c.SDL_DEFAULT_MOUSE_ID, button, true);
 }
 
-pub fn kbmButtonRelease(
-    _: *@This(),
-    ts: u64,
-    _: sorvi.kbm_v1.absolute_t,
-    sorvi_mods: sorvi.kbm_v1.modifiers_t,
-    sorvi_button: sorvi.kbm_v1.button_t
-) !void {
+pub fn kbmButtonRelease(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_button: sorvi.kbm_v1.button_t) !void {
     const mods = sorviModifiersToSdl(sorvi_mods);
     c.SDL_SetModState(mods);
     const button = sorviButtonToSdl(sorvi_button) orelse return;
@@ -689,9 +665,7 @@ pub fn videoConfiguration(_: *@This(), new: sorvi.video_v1.configuration_t, rw: 
                 _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_ENTER_FULLSCREEN, 0, 0);
                 _ = c.SDL_UpdateFullscreenMode(window, 1, false);
             },
-            .fixed,
-            .dont_care,
-            _ => {
+            .fixed, .dont_care, _ => {
                 if (old.presentation == .fullscreen) {
                     _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_LEAVE_FULLSCREEN, 0, 0);
                     _ = c.SDL_UpdateFullscreenMode(window, 0, false);
