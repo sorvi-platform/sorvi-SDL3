@@ -68,6 +68,7 @@ const global = struct {
     var audio_buffer: []u8 = &.{};
     var relative_mode: bool = false;
     var modes: []sorvi.video_v1.display_mode_id_t = &.{};
+    var window_scale: f32 = 1.0;
 };
 
 fn SORVI_CreateDevice() callconv(.c) ?*c.SDL_VideoDevice {
@@ -606,12 +607,20 @@ pub fn kbmMouseMotion(
     sorvi_mods: sorvi.kbm_v1.modifiers_t,
     rel: sorvi.kbm_v1.relative_t,
 ) !void {
+    const window = global.window orelse return;
     const mods = sorviModifiersToSdl(sorvi_mods);
     c.SDL_SetModState(mods);
     if (global.relative_mode) {
-        c.SDL_SendMouseMotion(ts, global.window, c.SDL_DEFAULT_MOUSE_ID, true, rel.x, rel.y);
+        c.SDL_SendMouseMotion(ts, window, c.SDL_DEFAULT_MOUSE_ID, true, rel.x, rel.y);
     } else {
-        c.SDL_SendMouseMotion(ts, global.window, c.SDL_DEFAULT_MOUSE_ID, false, @floatFromInt(abs.x), @floatFromInt(abs.y));
+        if (window.flags & c.SDL_WINDOW_HIGH_PIXEL_DENSITY != 0) {
+            c.SDL_SendMouseMotion(ts, window, c.SDL_DEFAULT_MOUSE_ID, false, @floatFromInt(abs.x), @floatFromInt(abs.y));
+        } else {
+            const scale: f32 = global.window_scale;
+            const abs_x: f32 = @floatFromInt(abs.x);
+            const abs_y: f32 = @floatFromInt(abs.y);
+            c.SDL_SendMouseMotion(ts, window, c.SDL_DEFAULT_MOUSE_ID, false, abs_x * scale, abs_y * scale);
+        }
     }
 }
 
@@ -659,8 +668,21 @@ pub fn videoConfiguration(_: *@This(), new: sorvi.video_v1.configuration_t, rw: 
     global.render_w = rw;
     global.render_h = rh;
     const window = global.window orelse return;
-    if (new.w != old.w or new.h != old.h) {
-        _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_RESIZED, new.w, new.h);
+    const scale = @as(f32, @floatFromInt(rw)) / @as(f32, @floatFromInt(new.w));
+    if (window.flags & c.SDL_WINDOW_HIGH_PIXEL_DENSITY != 0) {
+        if (global.window_scale != scale) {
+            window.display_scale = scale;
+            global.window_scale = scale;
+            _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED, 0, 0);
+        }
+        if (new.w != old.w or new.h != old.h) {
+            _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_RESIZED, new.w, new.h);
+        }
+    } else {
+        global.window_scale = scale;
+        if (rw != old_rw or rh != old_rh) {
+            _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_RESIZED, rw, rh);
+        }
     }
     if (rw != old_rw or rh != old_rh) {
         _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, rw, rh);
