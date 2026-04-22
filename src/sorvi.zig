@@ -67,6 +67,7 @@ const global = struct {
     var audio_device: ?*c.SDL_AudioDevice = null;
     var audio_buffer: []u8 = &.{};
     var relative_mode: bool = false;
+    var modes: []sorvi.video_v1.display_mode_id_t = &.{};
 };
 
 fn SORVI_CreateDevice() callconv(.c) ?*c.SDL_VideoDevice {
@@ -115,9 +116,13 @@ fn SORVI_SetRelativeMouseMode(enabled: bool) callconv(.c) bool {
 }
 
 fn SORVI_VideoInit(_: ?*c.SDL_VideoDevice) callconv(.c) bool {
-    for (sorvi.video_v1.query_display_modes()) |mode| {
+    const modes = sorvi.video_v1.query_display_modes();
+    sorvi.default_allocator.free(global.modes);
+    global.modes = sorvi.default_allocator.alloc(sorvi.video_v1.display_mode_id_t, modes.len) catch return false;
+    for (modes, 0..) |mode, idx| {
+        global.modes[idx] = mode.id;
         const ret = c.SDL_AddBasicVideoDisplay(&.{
-            .displayID = @intCast(@intFromEnum(mode.id)),
+            .displayID = @intCast(idx),
             .w = mode.w,
             .h = mode.h,
             .pixel_density = mode.scale,
@@ -136,11 +141,12 @@ fn SORVI_VideoInit(_: ?*c.SDL_VideoDevice) callconv(.c) bool {
 
 fn SORVI_VideoQuit(device: ?*c.SDL_VideoDevice) callconv(.c) void {
     if (global.window) |window| SORVI_DestroyWindow(device, window);
+    sorvi.default_allocator.free(global.modes);
 }
 
 fn SORVI_SetDisplayMode(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_VideoDisplay, mode: ?*c.SDL_DisplayMode) callconv(.c) bool {
     var cpy = global.configuration;
-    cpy.mode = @enumFromInt(mode.?.displayID);
+    cpy.mode = global.modes[mode.?.displayID];
     sorvi.video_v1.configure(cpy) catch return false;
     return true;
 }
