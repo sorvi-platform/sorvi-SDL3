@@ -17,12 +17,12 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .api = .core,
         .extensions = &.{
-            "ext",
             "core_v1",
             "mem_v1",
             "thread_v1",
             "fs_v1",
             "kbm_v1",
+            "time_v1",
             "audio_v1",
             "video_v1",
             "raster_v1",

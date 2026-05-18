@@ -206,7 +206,7 @@ fn SORVI_CreateWindowFramebuffer(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window, form
     format.?.* = c.SDL_PIXELFORMAT_BGRA32;
     pixels.?.* = null;
     pitch.?.* = 0;
-    if (!sorvi.raster_v1.available) return false;
+    if (!sorvi.raster_v1.available()) return false;
     if (global.api == .raster) return true;
     if (global.api != .none) return false;
     sorvi.raster_v1.init(.{
@@ -246,7 +246,7 @@ fn SORVI_DestroyWindowFramebuffer(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window) cal
 }
 
 fn SORVI_GL_LoadLibrary(_: ?*c.SDL_VideoDevice, _: ?[*:0]const u8) callconv(.c) bool {
-    return sorvi.gles_v1.available;
+    return sorvi.gles_v1.available();
 }
 
 fn SORVI_GL_UnloadLibrary(_: ?*c.SDL_VideoDevice) callconv(.c) void {}
@@ -257,7 +257,7 @@ fn SORVI_GL_GetProcAddress(_: ?*c.SDL_VideoDevice, proc: ?[*:0]const u8) callcon
 }
 
 fn SORVI_GL_CreateContext(device: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window) callconv(.c) ?*c.SDL_GLContextState {
-    if (!sorvi.gles_v1.available) return null;
+    if (!sorvi.gles_v1.available()) return null;
     if (global.api == .gles) return @ptrFromInt(0xDEADBEEF);
     if (global.api != .none) return null;
     global.api = .{
@@ -390,7 +390,7 @@ fn fake_vk_instance_proc_addr_fn(instance: c.VkInstance, raw_name: [*:0]const u8
 }
 
 fn SORVI_VK_LoadLibrary(device: ?*c.SDL_VideoDevice, _: ?[*:0]const u8) callconv(.c) bool {
-    if (!sorvi.vulkan_v1.available) return false;
+    if (!sorvi.vulkan_v1.available()) return false;
     device.?.vulkan_config.vkGetInstanceProcAddr = @ptrCast(&fake_vk_instance_proc_addr_fn);
     return true;
 }
@@ -405,7 +405,7 @@ fn SORVI_VK_GetInstanceExtensions(_: ?*c.SDL_VideoDevice, count: ?*u32) callconv
 }
 
 fn SORVI_VK_CreateSurface(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window, _: c.VkInstance, _: ?*const c.VkAllocationCallbacks, surface: ?*c.VkSurfaceKHR) callconv(.c) bool {
-    if (!sorvi.vulkan_v1.available) return false;
+    if (!sorvi.vulkan_v1.available()) return false;
     if (global.api != .vulkan) return false;
     surface.?.* = switch (builtin.target.cpu.arch) {
         .wasm32, .wasm64 => @intFromPtr(global.api.vulkan.surface),
@@ -514,7 +514,7 @@ comptime {
     });
 }
 
-pub fn sorvi_core_v1_get_str_core(key: sorvi.core_v1.str_key_core_t) callconv(sorvi.abi.ccv) ?[*:0]const u8 {
+pub fn core_v1_get_str_core(_: *@This(), key: sorvi.core_v1.str_key_core_t) callconv(sorvi.abi.ccv) ?[*:0]const u8 {
     return switch (key) {
         .id => @extern([*:0]const u8, .{ .name = "SDL_SORVI_app_id", .visibility = .hidden }),
         .name => @extern([*:0]const u8, .{ .name = "SDL_SORVI_app_name", .visibility = .hidden }),
@@ -523,7 +523,7 @@ pub fn sorvi_core_v1_get_str_core(key: sorvi.core_v1.str_key_core_t) callconv(so
     };
 }
 
-pub fn init(_: *@This()) !void {
+pub fn core_v1_init(_: *@This()) !void {
     const argv: [*]const ?[*:0]const u8 = &.{ "SDL3_app", null };
     switch (c.SDL_main(1, @ptrCast(@constCast(argv)))) {
         0 => {},
@@ -531,7 +531,7 @@ pub fn init(_: *@This()) !void {
     }
 }
 
-pub fn deinit(_: *@This()) void {
+pub fn core_v1_deinit(_: *@This()) void {
     c.SDL_SendAppEvent(c.SDL_EVENT_TERMINATING);
 }
 
@@ -551,7 +551,7 @@ fn sorviModifiersToSdl(sorvi_mods: sorvi.kbm_v1.modifiers_t) c.SDL_Keymod {
     return mods;
 }
 
-pub fn kbmKeyPress(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_scancode: sorvi.kbm_v1.scancode_t) !void {
+pub fn kbm_v1_key_press(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_scancode: sorvi.kbm_v1.scancode_t) !void {
     const mods = sorviModifiersToSdl(sorvi_mods);
     c.SDL_SetModState(mods);
     const scancode: c.SDL_Scancode = @intFromEnum(sorvi_scancode);
@@ -563,7 +563,7 @@ pub fn kbmKeyPress(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods:
     }
 }
 
-pub fn kbmKeyRelease(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_scancode: sorvi.kbm_v1.scancode_t) !void {
+pub fn kbm_v1_key_release(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_scancode: sorvi.kbm_v1.scancode_t) !void {
     const mods = sorviModifiersToSdl(sorvi_mods);
     c.SDL_SetModState(mods);
     const scancode: c.SDL_Scancode = @intFromEnum(sorvi_scancode);
@@ -586,21 +586,21 @@ fn sorviButtonToSdl(button: sorvi.kbm_v1.button_t) ?u8 {
     };
 }
 
-pub fn kbmButtonPress(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_button: sorvi.kbm_v1.button_t) !void {
+pub fn kbm_v1_button_press(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_button: sorvi.kbm_v1.button_t) !void {
     const mods = sorviModifiersToSdl(sorvi_mods);
     c.SDL_SetModState(mods);
     const button = sorviButtonToSdl(sorvi_button) orelse return;
     c.SDL_SendMouseButton(ts, global.window, c.SDL_DEFAULT_MOUSE_ID, button, true);
 }
 
-pub fn kbmButtonRelease(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_button: sorvi.kbm_v1.button_t) !void {
+pub fn kbm_v1_button_release(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_button: sorvi.kbm_v1.button_t) !void {
     const mods = sorviModifiersToSdl(sorvi_mods);
     c.SDL_SetModState(mods);
     const button = sorviButtonToSdl(sorvi_button) orelse return;
     c.SDL_SendMouseButton(ts, global.window, c.SDL_DEFAULT_MOUSE_ID, button, false);
 }
 
-pub fn kbmMouseMotion(
+pub fn kbm_v1_mouse_motion(
     _: *@This(),
     ts: u64,
     abs: sorvi.kbm_v1.absolute_t,
@@ -624,7 +624,7 @@ pub fn kbmMouseMotion(
     }
 }
 
-pub fn kbmMouseScroll(
+pub fn kbm_v1_mouse_scroll(
     _: *@This(),
     ts: u64,
     _: sorvi.kbm_v1.absolute_t,
@@ -640,7 +640,7 @@ pub fn kbmMouseScroll(
 // To port a SDL2 application, this function needs to be implemented!
 extern fn SDL2_iterate() callconv(.c) c_int;
 
-pub fn videoTick(_: *@This(), _: sorvi.video_v1.frame_t) !u64 {
+pub fn video_v1_tick(_: *@This(), _: sorvi.video_v1.frame_t) !u64 {
     if (!build_options.sdl2_compat) {
         std.debug.assert(c.SDL_HasMainCallbacks()); // your SDL3 app is setup wrong
         switch (c.SDL_IterateMainCallbacks(true)) {
@@ -660,7 +660,7 @@ pub fn videoTick(_: *@This(), _: sorvi.video_v1.frame_t) !u64 {
     return 0;
 }
 
-pub fn videoConfiguration(_: *@This(), new: sorvi.video_v1.configuration_t, rw: u16, rh: u16) !void {
+pub fn video_v1_configuration(_: *@This(), new: sorvi.video_v1.configuration_t, rw: u16, rh: u16) !void {
     const old = global.configuration;
     global.configuration = new;
     const old_rw = global.render_w;
@@ -703,7 +703,7 @@ pub fn videoConfiguration(_: *@This(), new: sorvi.video_v1.configuration_t, rw: 
     }
 }
 
-pub fn audioTick(_: *@This(), buffer: []u8) !void {
+pub fn audio_v1_tick(_: *@This(), buffer: []u8) !void {
     global.audio_buffer = buffer;
     _ = c.SDL_PlaybackAudioThreadIterate(global.audio_device);
     global.audio_buffer = &.{};
