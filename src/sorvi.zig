@@ -170,7 +170,7 @@ fn SORVI_SetWindowSize(_: ?*c.SDL_VideoDevice, window: ?*c.SDL_Window) callconv(
     var cpy = global.configuration;
     cpy.w = @intCast(window.?.pending.w);
     cpy.h = @intCast(window.?.pending.h);
-    sorvi.video_v1.configure(cpy) catch return;
+    sorvi.video_v1.configure(cpy) catch {};
 }
 
 fn SORVI_GetWindowSizeInPixels(_: ?*c.SDL_VideoDevice, _: ?*c.SDL_Window, w: ?*c_int, h: ?*c_int) callconv(.c) void {
