@@ -660,11 +660,11 @@ pub fn video_v1_tick(_: *@This(), _: sorvi.video_v1.frame_t) !u64 {
     return 0;
 }
 
-pub fn video_v1_configuration(_: *@This(), new: sorvi.video_v1.configuration_t, rw: u16, rh: u16) !void {
+// This always sends the SDL events as the frontend may reject the configuration
+// SDL itself does change detection so we need to trigger the change by first sending something else
+pub fn video_v1_configuration(_: *@This(), new: sorvi.video_v1.configuration_t, rw: u16, rh: u16) void {
     const old = global.configuration;
     global.configuration = new;
-    const old_rw = global.render_w;
-    const old_rh = global.render_h;
     global.render_w = rw;
     global.render_h = rh;
     const window = global.window orelse return;
@@ -675,28 +675,25 @@ pub fn video_v1_configuration(_: *@This(), new: sorvi.video_v1.configuration_t, 
             global.window_scale = scale;
             _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED, 0, 0);
         }
-        if (new.w != old.w or new.h != old.h) {
-            _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_RESIZED, new.w, new.h);
-        }
+        _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_RESIZED, if (new.w > 1) new.w - 1 else new.w + 1, if (new.h > 1) new.h - 1 else new.h + 1);
+        _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_RESIZED, new.w, new.h);
     } else {
         global.window_scale = scale;
-        if (rw != old_rw or rh != old_rh) {
-            _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_RESIZED, rw, rh);
-        }
+        _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_RESIZED, if (rw > 1) rw - 1 else rw + 1, if (rh > 1) rh - 1 else rh + 1);
+        _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_RESIZED, rw, rh);
     }
-    if (rw != old_rw or rh != old_rh) {
-        _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, rw, rh);
-    }
+    _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, if (rw > 1) rw - 1 else rw + 1, if (rh > 1) rh - 1 else rh + 1);
+    _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, rw, rh);
     if (new.presentation != old.presentation) {
         switch (new.presentation) {
             .fullscreen => {
-                _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_ENTER_FULLSCREEN, 0, 0);
                 _ = c.SDL_UpdateFullscreenMode(window, 1, false);
+                _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_ENTER_FULLSCREEN, 0, 0);
             },
             .fixed, .dont_care, _ => {
                 if (old.presentation == .fullscreen) {
-                    _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_LEAVE_FULLSCREEN, 0, 0);
                     _ = c.SDL_UpdateFullscreenMode(window, 0, false);
+                    _ = c.SDL_SendWindowEvent(window, c.SDL_EVENT_WINDOW_LEAVE_FULLSCREEN, 0, 0);
                 }
             },
         }
