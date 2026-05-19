@@ -515,7 +515,8 @@ pub fn build(b: *std.Build) void {
     };
 
     const headers = b.addTranslateC(.{
-        .root_source_file = b.addWriteFiles().add("SDL3.h",
+        .root_source_file = b.addWriteFiles().add("SDL3.h", b.fmt(
+            \\#define SDL_SORVI_SDL2_COMPAT_MODE {}
             \\#define UINT64_C(x) (uint64_t)(x)
             \\float SDL_fabsf_REAL(float);
             \\#include "SDL3/SDL_stdinc.h"
@@ -526,7 +527,7 @@ pub fn build(b: *std.Build) void {
             \\#include "events/SDL_keyboard_c.h"
             \\#include "events/SDL_mouse_c.h"
             \\#include "main/SDL_main_callbacks.h"
-        ),
+        , .{@as(u32, if (sdl2_compat) 1 else 0)})),
         .target = sorvi.resolveSorviTarget(b, target.query),
         .optimize = optimize,
         .link_libc = false,
