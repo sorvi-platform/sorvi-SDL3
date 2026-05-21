@@ -517,7 +517,7 @@ pub fn build(b: *std.Build) void {
     const headers = b.addTranslateC(.{
         .root_source_file = b.addWriteFiles().add("SDL3.h", b.fmt(
             \\#define SDL_SORVI_SDL2_COMPAT_MODE {}
-            \\#define UINT64_C(x) (uint64_t)(x)
+            \\#define SDL_UINT64_C(x) (uint64_t)(x)
             \\float SDL_fabsf_REAL(float);
             \\#include "SDL3/SDL_stdinc.h"
             \\#include "video/SDL_sysvideo.h"

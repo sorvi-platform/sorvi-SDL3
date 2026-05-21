@@ -653,7 +653,7 @@ pub fn video_v1_tick(_: *@This(), _: sorvi.video_v1.frame_t) !u64 {
     } else {
         switch (SDL2_iterate()) {
             c.SDL_APP_CONTINUE => {},
-            else => |_| sorvi.core_v1.exit(),
+            else => sorvi.core_v1.exit(),
         }
     }
     // TODO: handle callback rate
