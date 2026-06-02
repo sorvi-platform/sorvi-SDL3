@@ -529,7 +529,7 @@ pub fn build(b: *std.Build) void {
             \\#include "main/SDL_main_callbacks.h"
         , .{@as(u32, if (sdl2_compat) 1 else 0)})),
         .target = sorvi.resolveSorviTarget(b, target.query),
-        .optimize = optimize,
+        .optimize = .ReleaseSmall, // ReleaseSafe etc causes stack protector generation
         .link_libc = false,
     });
     headers.addSystemIncludePath(sysroot.headers);
