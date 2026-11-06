@@ -554,7 +554,7 @@ fn sorviModifiersToSdl(sorvi_mods: sorvi.kbm_v1.modifiers_t) c.SDL_Keymod {
 pub fn kbm_v1_key_press(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_scancode: sorvi.kbm_v1.scancode_t) !void {
     const mods = sorviModifiersToSdl(sorvi_mods);
     c.SDL_SetModState(mods);
-    const scancode: c.SDL_Scancode = @intFromEnum(sorvi_scancode);
+    const scancode: c.SDL_Scancode = @backingInt(sorvi_scancode);
     const keycode = c.SDL_GetKeyFromScancode(scancode, mods, true);
     if (keycode != c.SDLK_UNKNOWN) {
         _ = c.SDL_SendKeyboardKeyAndKeycode(ts, c.SDL_DEFAULT_KEYBOARD_ID, 0, scancode, keycode, true);
@@ -566,7 +566,7 @@ pub fn kbm_v1_key_press(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_
 pub fn kbm_v1_key_release(_: *@This(), ts: u64, _: sorvi.kbm_v1.absolute_t, sorvi_mods: sorvi.kbm_v1.modifiers_t, sorvi_scancode: sorvi.kbm_v1.scancode_t) !void {
     const mods = sorviModifiersToSdl(sorvi_mods);
     c.SDL_SetModState(mods);
-    const scancode: c.SDL_Scancode = @intFromEnum(sorvi_scancode);
+    const scancode: c.SDL_Scancode = @backingInt(sorvi_scancode);
     const keycode = c.SDL_GetKeyFromScancode(scancode, mods, true);
     if (keycode != c.SDLK_UNKNOWN) {
         _ = c.SDL_SendKeyboardKeyAndKeycode(ts, c.SDL_DEFAULT_KEYBOARD_ID, 0, scancode, keycode, false);

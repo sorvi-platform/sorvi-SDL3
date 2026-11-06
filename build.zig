@@ -1,8 +1,6 @@
-const std = @import("std");
+const version = std.SemanticVersion.parse(@import("build.zig.zon").version) catch unreachable;
 
-const sorvi = @import("sorvi");
-
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -36,7 +34,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const sysroot = sorvi.createSysroot(b, .{
+    const sysroot = try sorvi.createSysroot(b, .{
         .target = sorvi.resolveSorviTarget(b, target.query),
         .optimize = optimize,
         .include_libc = true,
@@ -113,7 +111,6 @@ pub fn build(b: *std.Build) void {
             .HAVE_STRTOK_R = true,
             .HAVE_ITOA = false,
             .HAVE__LTOA = false,
-            .HAVE__UITOA = false,
             .HAVE__ULTOA = false,
             .HAVE_STRTOL = true,
             .HAVE_STRTOUL = true,
@@ -228,7 +225,6 @@ pub fn build(b: *std.Build) void {
             .HAVE_DSOUND_H = false,
             .HAVE_DINPUT_H = false,
             .HAVE_XINPUT_H = false,
-            .HAVE_WINDOWS_GAMING_INPUT_H = false,
             .HAVE_GAMEINPUT_H = false,
             .HAVE_DXGI_H = false,
             .HAVE_DXGI1_5_H = false,
@@ -301,11 +297,9 @@ pub fn build(b: *std.Build) void {
             .SDL_JOYSTICK_N3DS = false,
             .SDL_JOYSTICK_PS2 = false,
             .SDL_JOYSTICK_PSP = false,
-            .SDL_JOYSTICK_RAWINPUT = false,
             .SDL_JOYSTICK_USBHID = false,
             .SDL_JOYSTICK_VIRTUAL = false,
             .SDL_JOYSTICK_VITA = false,
-            .SDL_JOYSTICK_WGI = false,
             .SDL_JOYSTICK_XINPUT = false,
             .SDL_JOYSTICK_PRIVATE = false,
             .SDL_HAPTIC_DUMMY = true,
@@ -347,7 +341,6 @@ pub fn build(b: *std.Build) void {
             .SDL_TIME_WINDOWS = false,
             .SDL_TIME_VITA = false,
             .SDL_TIME_PSP = false,
-            .SDL_TIME_PS2 = false,
             .SDL_TIME_N3DS = false,
             .SDL_TIME_NGAGE = false,
             .SDL_TIME_PRIVATE = false,
@@ -493,6 +486,7 @@ pub fn build(b: *std.Build) void {
             .SDL_VIDEO_VITA_PIB = false,
             .SDL_VIDEO_VITA_PVR = false,
             .SDL_VIDEO_VITA_PVR_OGL = false,
+            .SDL_EMSCRIPTEN_PERSISTENT_PATH_STRING = null,
             .SDL_XKBCOMMON_VERSION_MAJOR = null,
             .SDL_XKBCOMMON_VERSION_MINOR = null,
             .SDL_XKBCOMMON_VERSION_PATCH = null,
@@ -529,7 +523,7 @@ pub fn build(b: *std.Build) void {
             \\#include "main/SDL_main_callbacks.h"
         , .{@as(u32, if (sdl2_compat) 1 else 0)})),
         .target = sorvi.resolveSorviTarget(b, target.query),
-        .optimize = .ReleaseSmall, // ReleaseSafe etc causes stack protector generation
+        .optimize = .small, // safe etc causes stack protector generation
         .link_libc = false,
     });
     headers.addSystemIncludePath(sysroot.headers);
@@ -544,7 +538,7 @@ pub fn build(b: *std.Build) void {
     const libSDL3 = b.addLibrary(.{
         .name = "SDL3",
         .linkage = .static,
-        .version = .{ .major = 3, .minor = 4, .patch = 0 },
+        .version = version,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/sorvi.zig"),
             .target = sorvi.resolveSorviTarget(b, target.query),
@@ -791,7 +785,7 @@ pub fn build(b: *std.Build) void {
     };
 
     for (examples) |example| {
-        const core = sorvi.addSorviCore(b, .{
+        const core = try sorvi.addSorviCore(b, .{
             .name = example.name,
             .root_module = b.createModule(.{
                 .target = target,
@@ -803,8 +797,11 @@ pub fn build(b: *std.Build) void {
         core.root_module.addCSourceFile(.{
             .file = b.path(example.file),
         });
-        core.fixup(b);
+        try core.fixup(b);
         const step = b.step(b.fmt("example:{s}", .{example.name}), b.fmt("run {s} example", .{example.name}));
         step.dependOn(&sorvi.addRunSorviCore(b, frontend, core).step);
     }
 }
+
+const std = @import("std");
+const sorvi = @import("sorvi");
